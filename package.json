@@ -1,5 +1,6 @@
 {
   "name": "meeting-scribe",
+  "productName": "Raja_Dharmaraj_Minutes_Notes_Taker",
   "version": "0.1.0",
   "description": "Desktop meeting recorder: live transcript + AI-generated meeting minutes",
   "main": "./out/main/index.js",

@@ -1,8 +1,20 @@
 import { app, BrowserWindow, ipcMain, session, desktopCapturer } from 'electron'
 import { join } from 'path'
+import { mkdirSync } from 'fs'
 import { startDeepgramStream, sendAudioChunk, stopDeepgramStream } from './deepgram'
 import { generateMinutes } from './mistral'
 import { exportTranscriptToDocx, exportMinutesToDocx } from './exportDocx'
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
+
+if (!app.isPackaged) {
+  const sessionDataPath = join(app.getPath('temp'), 'raja-dharmaraj-minutes-notes-taker-session-data')
+  mkdirSync(sessionDataPath, { recursive: true })
+  app.setPath('sessionData', sessionDataPath)
+}
 
 try {
   process.loadEnvFile(join(app.getAppPath(), '.env'))

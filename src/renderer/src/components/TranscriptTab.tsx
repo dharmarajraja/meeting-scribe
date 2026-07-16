@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import type { TranscriptSegment } from '@shared/types'
+import { getIpcApi } from '../lib/ipcApi'
 
 interface Props {
   segments: TranscriptSegment[]
   interim: TranscriptSegment | null
   meetingTitle: string
+  isBrowserMode: boolean
 }
 
 function formatTimestamp(ms: number): string {
@@ -15,8 +17,9 @@ function formatTimestamp(ms: number): string {
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
 }
 
-function TranscriptTab({ segments, interim, meetingTitle }: Props): JSX.Element {
+function TranscriptTab({ segments, interim, meetingTitle, isBrowserMode }: Props): JSX.Element {
   const [query, setQuery] = useState('')
+  const api = getIpcApi()
 
   const filtered = useMemo(() => {
     if (!query.trim()) return segments
@@ -25,7 +28,7 @@ function TranscriptTab({ segments, interim, meetingTitle }: Props): JSX.Element 
   }, [segments, query])
 
   const handleExport = async (): Promise<void> => {
-    const result = await window.api.exportTranscript(segments, meetingTitle)
+    const result = await api.exportTranscript(segments, meetingTitle)
     if (!result.ok && result.error && result.error !== 'Export canceled') {
       alert(`Export failed: ${result.error}`)
     }
@@ -40,7 +43,7 @@ function TranscriptTab({ segments, interim, meetingTitle }: Props): JSX.Element 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button className="btn btn-export" onClick={handleExport} disabled={segments.length === 0}>
+        <button className="btn btn-export" onClick={handleExport} disabled={segments.length === 0 || isBrowserMode}>
           Export .docx
         </button>
       </div>

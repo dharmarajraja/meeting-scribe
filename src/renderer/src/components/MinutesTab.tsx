@@ -1,17 +1,21 @@
 import type { MeetingMinutes } from '@shared/types'
+import { getIpcApi } from '../lib/ipcApi'
 
 interface Props {
   minutes: MeetingMinutes | null
   meetingTitle: string
   isGenerating: boolean
   canGenerate: boolean
+  isBrowserMode: boolean
   onRegenerate: () => void
 }
 
-function MinutesTab({ minutes, meetingTitle, isGenerating, canGenerate, onRegenerate }: Props): JSX.Element {
+function MinutesTab({ minutes, meetingTitle, isGenerating, canGenerate, isBrowserMode, onRegenerate }: Props): JSX.Element {
+  const api = getIpcApi()
+
   const handleExport = async (): Promise<void> => {
     if (!minutes) return
-    const result = await window.api.exportMinutes(minutes, meetingTitle)
+    const result = await api.exportMinutes(minutes, meetingTitle)
     if (!result.ok && result.error && result.error !== 'Export canceled') {
       alert(`Export failed: ${result.error}`)
     }
@@ -27,7 +31,7 @@ function MinutesTab({ minutes, meetingTitle, isGenerating, canGenerate, onRegene
         No minutes yet. Minutes are generated automatically when you stop recording.
         {canGenerate && (
           <div style={{ marginTop: 16 }}>
-            <button className="btn btn-start" onClick={onRegenerate}>
+            <button className="btn btn-start" onClick={onRegenerate} disabled={isBrowserMode}>
               Generate Minutes Now
             </button>
           </div>
@@ -41,10 +45,10 @@ function MinutesTab({ minutes, meetingTitle, isGenerating, canGenerate, onRegene
       <div className="minutes-header">
         <div>Generated {new Date(minutes.generatedAt).toLocaleString()}</div>
         <div className="minutes-actions">
-          <button className="btn btn-export" onClick={onRegenerate}>
+          <button className="btn btn-export" onClick={onRegenerate} disabled={isBrowserMode}>
             Regenerate
           </button>
-          <button className="btn btn-export" onClick={handleExport}>
+          <button className="btn btn-export" onClick={handleExport} disabled={isBrowserMode}>
             Export .docx
           </button>
         </div>

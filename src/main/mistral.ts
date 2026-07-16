@@ -1,4 +1,3 @@
-import { Mistral } from '@mistralai/mistralai'
 import type { MeetingMinutes, TranscriptSegment } from '../shared/types'
 
 // Verify this against the current model list in the Mistral docs
@@ -41,6 +40,14 @@ export async function generateMinutes(transcript: TranscriptSegment[]): Promise<
   const apiKey = process.env.MISTRAL_API_KEY
   if (!apiKey) {
     throw new Error('MISTRAL_API_KEY is not set. Add it to your .env file.')
+  }
+
+  // The Mistral SDK is ESM-only; load it lazily so CommonJS Electron main builds can run.
+  let Mistral: typeof import('@mistralai/mistralai').Mistral
+  try {
+    ;({ Mistral } = await import('@mistralai/mistralai'))
+  } catch {
+    throw new Error('Failed to load the Mistral SDK. Ensure @mistralai/mistralai is installed correctly.')
   }
 
   const transcriptText = transcript

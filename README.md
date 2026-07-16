@@ -1,4 +1,4 @@
-# Meeting Scribe
+# Raja_Dharmaraj_Minutes_Notes_Taker
 
 Desktop app (Electron + React + TypeScript) that records a meeting, produces a
 live, speaker-labeled transcript, and generates structured meeting minutes

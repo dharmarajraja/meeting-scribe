@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MeetingMinutes, RecorderStatus, TranscriptSegment } from '@shared/types'
 import { startAudioSession, type AudioSessionHandle } from './lib/audioMixer'
+import { getBrowserModeMessage, getIpcApi, isElectronBridgeAvailable } from './lib/ipcApi'
 import TranscriptTab from './components/TranscriptTab'
 import MinutesTab from './components/MinutesTab'
 
 type Tab = 'transcript' | 'minutes'
 
 function App(): JSX.Element {
+  const api = getIpcApi()
+  const isBrowserMode = !isElectronBridgeAvailable()
+
   const [meetingTitle, setMeetingTitle] = useState('Untitled Meeting')
   const [status, setStatus] = useState<RecorderStatus>('idle')
   const [statusMessage, setStatusMessage] = useState<string | undefined>()
@@ -18,7 +22,7 @@ function App(): JSX.Element {
   const audioSessionRef = useRef<AudioSessionHandle | null>(null)
 
   useEffect(() => {
-    const unsubscribeTranscript = window.api.onTranscriptUpdate((segment) => {
+    const unsubscribeTranscript = api.onTranscriptUpdate((segment) => {
       if (segment.isFinal) {
         setSegments((prev) => [...prev, segment])
         setInterim(null)
@@ -27,7 +31,7 @@ function App(): JSX.Element {
       }
     })
 
-    const unsubscribeStatus = window.api.onStatusChange((newStatus, message) => {
+    const unsubscribeStatus = api.onStatusChange((newStatus, message) => {
       setStatus(newStatus)
       setStatusMessage(message)
     })
@@ -36,16 +40,35 @@ function App(): JSX.Element {
       unsubscribeTranscript()
       unsubscribeStatus()
     }
+  }, [api])
+
+  useEffect(() => {
+    return () => {
+      audioSessionRef.current?.stop()
+      audioSessionRef.current = null
+    }
   }, [])
 
+  useEffect(() => {
+    if (isBrowserMode) {
+      setStatusMessage(getBrowserModeMessage())
+    }
+  }, [isBrowserMode])
+
   const handleStart = useCallback(async () => {
+    if (isBrowserMode) {
+      setStatusMessage(getBrowserModeMessage())
+      setStatus('idle')
+      return
+    }
+
     setStatus('requesting-permissions')
     setStatusMessage(undefined)
     setSegments([])
     setInterim(null)
     setMinutes(null)
 
-    const result = await window.api.startRecording()
+    const result = await api.startRecording()
     if (!result.ok) {
       setStatus('error')
       setStatusMessage(result.error)
@@ -53,22 +76,22 @@ function App(): JSX.Element {
     }
 
     try {
-      audioSessionRef.current = await startAudioSession((chunk) => window.api.sendAudioChunk(chunk))
+      audioSessionRef.current = await startAudioSession((chunk) => api.sendAudioChunk(chunk))
       setStatus('recording')
     } catch (err) {
       setStatus('error')
       setStatusMessage(err instanceof Error ? err.message : 'Microphone/audio permission denied.')
     }
-  }, [])
+  }, [api, isBrowserMode])
 
   const handleStop = useCallback(async () => {
     setStatus('stopping')
     audioSessionRef.current?.stop()
     audioSessionRef.current = null
-    await window.api.stopRecording()
+    await api.stopRecording()
 
     setStatus('generating-minutes')
-    const result = await window.api.generateMinutes(segments)
+    const result = await api.generateMinutes(segments)
     if (result.ok && result.minutes) {
       setMinutes(result.minutes)
       setActiveTab('minutes')
@@ -77,11 +100,17 @@ function App(): JSX.Element {
       setStatus('error')
       setStatusMessage(result.error)
     }
-  }, [segments])
+  }, [api, segments])
 
   const handleRegenerateMinutes = useCallback(async () => {
+    if (isBrowserMode) {
+      setStatusMessage(getBrowserModeMessage())
+      setStatus('idle')
+      return
+    }
+
     setStatus('generating-minutes')
-    const result = await window.api.generateMinutes(segments)
+    const result = await api.generateMinutes(segments)
     if (result.ok && result.minutes) {
       setMinutes(result.minutes)
       setStatus('idle')
@@ -89,7 +118,7 @@ function App(): JSX.Element {
       setStatus('error')
       setStatusMessage(result.error)
     }
-  }, [segments])
+  }, [api, isBrowserMode, segments])
 
   const isRecording = status === 'recording' || status === 'requesting-permissions'
 
@@ -110,13 +139,14 @@ function App(): JSX.Element {
             ● Stop Recording
           </button>
         ) : (
-          <button className="btn btn-start" onClick={handleStart} disabled={status === 'generating-minutes'}>
+          <button className="btn btn-start" onClick={handleStart} disabled={status === 'generating-minutes' || isBrowserMode}>
             ● Start Recording
           </button>
         )}
       </header>
 
       {statusMessage && status === 'error' && <div className="error-banner">{statusMessage}</div>}
+      {statusMessage && isBrowserMode && <div className="info-banner">{statusMessage}</div>}
 
       <nav className="tabbar">
         <button
@@ -132,13 +162,14 @@ function App(): JSX.Element {
 
       <main className="content">
         {activeTab === 'transcript' ? (
-          <TranscriptTab segments={segments} interim={interim} meetingTitle={meetingTitle} />
+          <TranscriptTab segments={segments} interim={interim} meetingTitle={meetingTitle} isBrowserMode={isBrowserMode} />
         ) : (
           <MinutesTab
             minutes={minutes}
             meetingTitle={meetingTitle}
             isGenerating={status === 'generating-minutes'}
             canGenerate={segments.length > 0}
+            isBrowserMode={isBrowserMode}
             onRegenerate={handleRegenerateMinutes}
           />
         )}
