@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, session, desktopCapturer } from 'electron'
 import { join } from 'path'
 import { startDeepgramStream, sendAudioChunk, stopDeepgramStream } from './deepgram'
-import { generateMinutes } from './claude'
+import { generateMinutes } from './mistral'
 import { exportTranscriptToDocx, exportMinutesToDocx } from './exportDocx'
 
 try {

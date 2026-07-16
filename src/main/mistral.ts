@@ -1,10 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { Mistral } from '@mistralai/mistralai'
 import type { MeetingMinutes, TranscriptSegment } from '../shared/types'
 
-// Verify this against the current model list in the Anthropic docs
-// (https://docs.anthropic.com/en/docs/about-claude/models) before shipping —
-// model IDs are versioned and this default may need bumping over time.
-const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929'
+// Verify this against the current model list in the Mistral docs
+// (https://docs.mistral.ai/getting-started/models/) before shipping —
+// model IDs and capability tiers change over time.
+const DEFAULT_MODEL = 'mistral-large-latest'
 
 const SYSTEM_PROMPT = `You are an expert meeting-minutes writer for a business audience.
 Given a raw, possibly messy meeting transcript, extract structured minutes.
@@ -29,10 +29,18 @@ function extractJson(raw: string): string {
   return (fencedMatch ? fencedMatch[1] : raw).trim()
 }
 
+function formatTimestamp(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const h = Math.floor(totalSeconds / 3600)
+  const m = Math.floor((totalSeconds % 3600) / 60)
+  const s = totalSeconds % 60
+  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
+}
+
 export async function generateMinutes(transcript: TranscriptSegment[]): Promise<MeetingMinutes> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.MISTRAL_API_KEY
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not set. Add it to your .env file.')
+    throw new Error('MISTRAL_API_KEY is not set. Add it to your .env file.')
   }
 
   const transcriptText = transcript
@@ -44,18 +52,20 @@ export async function generateMinutes(transcript: TranscriptSegment[]): Promise<
     throw new Error('Transcript is empty — nothing to summarize.')
   }
 
-  const anthropic = new Anthropic({ apiKey })
-  const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL
+  const mistral = new Mistral({ apiKey })
+  const model = process.env.MISTRAL_MODEL || DEFAULT_MODEL
 
-  const response = await anthropic.messages.create({
+  const response = await mistral.chat.complete({
     model,
-    max_tokens: 2000,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: `Meeting transcript:\n\n${transcriptText}` }]
+    responseFormat: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `Meeting transcript:\n\n${transcriptText}` }
+    ]
   })
 
-  const block = response.content[0]
-  const raw = block.type === 'text' ? block.text : '{}'
+  const content = response.choices?.[0]?.message?.content
+  const raw = typeof content === 'string' ? content : '{}'
   const parsed = JSON.parse(extractJson(raw))
 
   return {
@@ -66,12 +76,4 @@ export async function generateMinutes(transcript: TranscriptSegment[]): Promise<
     nextSteps: parsed.nextSteps ?? [],
     generatedAt: new Date().toISOString()
   }
-}
-
-function formatTimestamp(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000)
-  const h = Math.floor(totalSeconds / 3600)
-  const m = Math.floor((totalSeconds % 3600) / 60)
-  const s = totalSeconds % 60
-  return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':')
 }
